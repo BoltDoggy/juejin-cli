@@ -1,10 +1,14 @@
 #!/usr/bin/env node
 
 import { Command } from 'commander';
+import { marked } from 'marked';
+import { markedTerminal } from 'marked-terminal';
 import { fetchArticles } from './api';
 import { displayArticles, displayArticleDetail, displayHelp } from './display';
 import { isAvailable as isLightpandaAvailable, fetchArticle as fetchWithLightpanda } from './lightpanda';
 import { ArticleItem } from './types';
+
+marked.use(markedTerminal());
 
 const program = new Command();
 
@@ -207,7 +211,8 @@ async function runInteractive(
         console.log(`正在用 lightpanda 获取文章...`);
         try {
           const content = await fetchWithLightpanda(url);
-          console.log('\n' + content + '\n');
+          const rendered = marked.parse(content);
+          console.log('\n' + rendered + '\n');
         } catch (error) {
           console.error('lightpanda 获取失败:', (error as Error).message);
         }
