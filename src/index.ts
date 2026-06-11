@@ -211,7 +211,9 @@ async function runInteractive(
         console.log(`正在用 lightpanda 获取文章...`);
         try {
           const content = await fetchWithLightpanda(url);
-          const rendered = marked.parse(content);
+          // 把 markdown 图片语法转换为友好的文本链接
+          const sanitized = content.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, '🔗 [图片: $1]($2)');
+          const rendered = marked.parse(sanitized);
           console.log('\n' + rendered + '\n');
         } catch (error) {
           console.error('lightpanda 获取失败:', (error as Error).message);
