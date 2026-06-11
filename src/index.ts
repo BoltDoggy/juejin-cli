@@ -104,7 +104,11 @@ async function runInteractive(
 
   let articles = currentArticles;
   let page = 1;
-  let selectedIndex = 0; // 当前选中的文章索引（0-based），用于 lightpanda 打开
+  let selectedIndex = 0; // 当前选中的全局文章序号（1-based），用于 lightpanda 打开
+  // 累积所有已加载的文章，支持全局序号查找
+  const allArticles: ArticleItem[] = [...currentArticles];
+  // 每一页在 allArticles 中的起始索引
+  const pageStartIndices: number[] = [0];
   // 每一页的起始 cursor，pageCursors[i] 对应第 i+1 页
   const pageCursors: string[] = ['0'];
   // 每一页请求后返回的下一页 cursor
@@ -129,22 +133,20 @@ async function runInteractive(
       return false;
     }
 
-    // 如果目标页已经缓存过 next cursor，说明之前访问过
-    if (targetPage <= pageCursors.length) {
-      try {
-        const result = await fetchArticles(sort, limit, pageCursors[targetPage - 1]);
-        articles = result.data.filter((item) => item.item_type === 2);
-        page = targetPage;
-        displayArticles(articles, (page - 1) * limit + 1);
-        return true;
-      } catch (error) {
-        console.error('加载失败:', (error as Error).message);
-        return false;
-      }
+    // 如果目标页已经缓存过，直接从 allArticles 中取出（避免重复请求）
+    if (targetPage <= pageStartIndices.length) {
+      const startIdx = pageStartIndices[targetPage - 1];
+      const endIdx = targetPage < pageStartIndices.length
+        ? pageStartIndices[targetPage]
+        : startIdx + limit;
+      articles = allArticles.slice(startIdx, endIdx);
+      page = targetPage;
+      displayArticles(articles, startIdx + 1);
+      return true;
     }
 
     // 需要加载新页面
-    const lastPage = pageCursors.length;
+    const lastPage = pageStartIndices.length;
     if (targetPage !== lastPage + 1) {
       console.log('无法直接跳转到该页面');
       return false;
@@ -159,9 +161,12 @@ async function runInteractive(
       }
       pageCursors.push(startCursor);
       nextCursors.push(result.cursor || startCursor);
-      articles = result.data.filter((item) => item.item_type === 2);
+      const newArticles = result.data.filter((item) => item.item_type === 2);
+      pageStartIndices.push(allArticles.length);
+      allArticles.push(...newArticles);
+      articles = newArticles;
       page = targetPage;
-      displayArticles(articles, (page - 1) * limit + 1);
+      displayArticles(articles, pageStartIndices[pageStartIndices.length - 1] + 1);
       return true;
     } catch (error) {
       console.error('加载失败:', (error as Error).message);
@@ -201,12 +206,12 @@ async function runInteractive(
       }
 
       if (lightpandaAvailable && cmd === 'o') {
-        if (selectedIndex <= 0 || selectedIndex > articles.length) {
+        if (selectedIndex <= 0 || selectedIndex > allArticles.length) {
           console.log('请先输入文章编号查看详情（如: 1）');
           ask();
           return;
         }
-        const article = articles[selectedIndex - 1];
+        const article = allArticles[selectedIndex - 1];
         const url = `https://juejin.cn/post/${article.item_info.article_info.article_id}`;
         console.log(`正在用 lightpanda 获取文章...`);
         try {
@@ -223,9 +228,9 @@ async function runInteractive(
       }
 
       const num = parseInt(cmd, 10);
-      if (!isNaN(num) && num > 0 && num <= articles.length) {
+      if (!isNaN(num) && num > 0 && num <= allArticles.length) {
         selectedIndex = num;
-        displayArticleDetail(articles[num - 1], num, lightpandaAvailable);
+        displayArticleDetail(allArticles[num - 1], num, lightpandaAvailable);
         ask();
         return;
       }
